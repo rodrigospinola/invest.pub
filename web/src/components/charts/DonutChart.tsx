@@ -5,12 +5,15 @@ export interface DonutSlice {
 
 interface DonutChartProps {
   data: DonutSlice[];
+  /** Diameter of the donut ring (not the total SVG size). Default 180. */
   size?: number;
+  /** Small inline variant — just the ring, no labels. */
   compact?: boolean;
+  /** Show BRL value in center and in labels. */
   valorTotal?: number;
-  /** Render on a dark background — makes SVG center text and legend text white */
+  /** White text palette for dark backgrounds. */
   darkBg?: boolean;
-  /** Only render the SVG donut — no side legend */
+  /** Donut only — no external labels (used inside hero banners). */
   noLegend?: boolean;
 }
 
@@ -25,156 +28,181 @@ export const CLASS_COLORS: Record<string, string> = {
   'Alternativos':         '#A3AED0',
 };
 
-// Suggested asset count range per class
-const CLASS_ASSET_HINT: Record<string, string> = {
-  'Ações':               '5–15 ações',
-  'Fundos imobiliários': '5–8 FIIs',
-};
-
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-function polarToCartesian(cx: number, cy: number, r: number, deg: number) {
+function polar(cx: number, cy: number, r: number, deg: number) {
   const rad = (deg - 90) * (Math.PI / 180);
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
 
-function arcPath(cx: number, cy: number, outerR: number, innerR: number, startDeg: number, endDeg: number) {
-  const GAP = 1.5;
-  const s = startDeg + GAP;
-  const e = endDeg - GAP;
-  if (e - s < 1) return '';
-
-  const p1 = polarToCartesian(cx, cy, outerR, s);
-  const p2 = polarToCartesian(cx, cy, outerR, e);
-  const p3 = polarToCartesian(cx, cy, innerR, e);
-  const p4 = polarToCartesian(cx, cy, innerR, s);
+function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: number) {
+  const GAP = 2.5;
+  const s = startDeg + GAP / 2;
+  const e = endDeg - GAP / 2;
+  if (e - s < 0.5) return '';
+  const a = polar(cx, cy, r, s);
+  const b = polar(cx, cy, r, e);
   const large = e - s > 180 ? 1 : 0;
-
-  return [
-    `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`,
-    `A ${outerR} ${outerR} 0 ${large} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`,
-    `L ${p3.x.toFixed(2)} ${p3.y.toFixed(2)}`,
-    `A ${innerR} ${innerR} 0 ${large} 0 ${p4.x.toFixed(2)} ${p4.y.toFixed(2)}`,
-    'Z',
-  ].join(' ');
+  return `M ${a.x.toFixed(2)},${a.y.toFixed(2)} A ${r},${r} 0 ${large} 1 ${b.x.toFixed(2)},${b.y.toFixed(2)}`;
 }
 
-export default function DonutChart({ data, size = 180, compact = false, valorTotal, darkBg = false, noLegend = false }: DonutChartProps) {
-  const cx = size / 2;
-  const cy = size / 2;
-  const outerR = size * 0.42;
-  const innerR = size * 0.26;
+export default function DonutChart({
+  data,
+  size = 180,
+  compact = false,
+  valorTotal,
+  darkBg = false,
+  noLegend = false,
+}: DonutChartProps) {
+  const showLabels = !compact && !noLegend;
 
-  // Color tokens that adapt to background
-  const textPrimary   = darkBg ? 'rgba(255,255,255,0.95)' : '#2B3674';
-  const textSecondary = darkBg ? 'rgba(255,255,255,0.6)'  : '#A3AED0';
-  const legendName    = darkBg ? 'rgba(255,255,255,0.9)'  : 'var(--text-body)';
-  const legendMuted   = darkBg ? 'rgba(255,255,255,0.6)'  : 'var(--text-muted)';
+  // Ring geometry
+  const outerR = size * 0.44;
+  const innerR = size * 0.27;
+  const midR   = (outerR + innerR) / 2;
+  const ringW  = outerR - innerR;
 
-  let currentDeg = 0;
-  const slices = data.map((item) => {
-    const startDeg = currentDeg;
-    const endDeg = currentDeg + (item.percentual / 100) * 360;
-    currentDeg = endDeg;
-    return { ...item, startDeg, endDeg };
+  // SVG canvas: extra padding around donut for labels
+  const PAD = showLabels ? 96 : 0;
+  const W = size + PAD * 2;
+  const H = size + PAD * 2;
+  const cx = W / 2;
+  const cy = H / 2;
+
+  const textPrimary = darkBg ? 'rgba(255,255,255,0.95)' : '#1B2559';
+  const textMuted   = darkBg ? 'rgba(255,255,255,0.55)' : '#A3AED0';
+
+  // Build slice angles
+  let deg = 0;
+  const slices = data.map(item => {
+    const start = deg;
+    const end   = deg + (item.percentual / 100) * 360;
+    deg = end;
+    return { ...item, start, end };
   });
 
-  // Total for center label when valorTotal provided
-  const totalFormatted = valorTotal ? BRL.format(valorTotal) : null;
+  // Center text sizing
+  const centerValueSize = compact ? Math.round(size * 0.09) : Math.round(size * 0.115);
+  const centerSubSize   = compact ? Math.round(size * 0.06) : Math.round(size * 0.065);
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: compact ? 'center' : 'flex-start',
-      gap: compact ? '16px' : '24px',
-      flexWrap: 'wrap',
-      justifyContent: noLegend ? 'flex-start' : 'center',
-    }}>
-      {/* Donut SVG */}
-      <svg
-        viewBox={`0 0 ${size} ${size}`}
-        width={size}
-        height={size}
-        style={{ flexShrink: 0 }}
-      >
-        {slices.map(({ classe, startDeg, endDeg }) => (
-          <path
-            key={classe}
-            d={arcPath(cx, cy, outerR, innerR, startDeg, endDeg)}
-            fill={CLASS_COLORS[classe] ?? '#9ca3af'}
-          />
-        ))}
-        {totalFormatted ? (
-          <>
-            <text x={cx} y={cy - 8} textAnchor="middle" fontSize={compact ? 8 : 9} fill={textSecondary} fontWeight="500">
-              Total
-            </text>
-            <text x={cx} y={cy + 6} textAnchor="middle" fontSize={compact ? 8 : 10} fill={textPrimary} fontWeight="700">
-              {totalFormatted}
-            </text>
-          </>
-        ) : (
-          <>
-            <text x={cx} y={cy - 6} textAnchor="middle" fontSize={compact ? 9 : 11} fill={textSecondary} fontWeight="500">
-              Carteira
-            </text>
-            <text x={cx} y={cy + 9} textAnchor="middle" fontSize={compact ? 9 : 11} fill={textSecondary} fontWeight="500">
-              ideal
-            </text>
-          </>
-        )}
-      </svg>
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      width={W}
+      height={H}
+      style={{ display: 'block', overflow: 'visible' }}
+    >
+      {/* ── Slices (stroked arcs → rounded caps automatically) ── */}
+      {slices.map(({ classe, start, end }) => (
+        <path
+          key={classe}
+          d={arcPath(cx, cy, midR, start, end)}
+          fill="none"
+          stroke={CLASS_COLORS[classe] ?? '#9ca3af'}
+          strokeWidth={ringW}
+          strokeLinecap="round"
+        />
+      ))}
 
-      {/* Legend — hidden when noLegend=true */}
-      {!noLegend && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? '5px' : '9px' }}>
-          {data.map(({ classe, percentual }) => {
-            const valor = valorTotal ? (percentual / 100) * valorTotal : null;
-            const hint  = CLASS_ASSET_HINT[classe];
-            return (
-              <div key={classe}>
-                {/* Row: color swatch + name + % */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: compact ? 12 : 13 }}>
-                  <div style={{
-                    width: compact ? 10 : 12,
-                    height: compact ? 10 : 12,
-                    borderRadius: '3px',
-                    flexShrink: 0,
-                    background: CLASS_COLORS[classe] ?? '#9ca3af',
-                  }} />
-                  <span style={{ color: legendName }}>{classe}</span>
-                  <span style={{ color: legendMuted, marginLeft: 'auto', fontWeight: 600, paddingLeft: '8px' }}>
-                    {percentual}%
-                  </span>
-                </div>
-
-                {/* Sub-row: R$ value + asset hint (only in full mode with valorTotal) */}
-                {!compact && (valor !== null || hint) && (
-                  <div style={{ paddingLeft: '19px', marginTop: '2px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    {valor !== null && (
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: darkBg ? 'rgba(0,226,220,0.9)' : 'var(--primary)' }}>
-                        {BRL.format(valor)}
-                      </span>
-                    )}
-                    {hint && (
-                      <span style={{
-                        fontSize: '10px',
-                        background: darkBg ? 'rgba(0,178,169,0.25)' : 'rgba(0,178,169,0.1)',
-                        color: darkBg ? '#00E5DB' : 'var(--primary)',
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        fontWeight: 600,
-                      }}>
-                        {hint}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+      {/* ── Center label ── */}
+      {valorTotal ? (
+        <>
+          <text
+            x={cx} y={cy + centerValueSize * 0.38}
+            textAnchor="middle"
+            fontSize={centerValueSize}
+            fontWeight="800"
+            fill={textPrimary}
+            fontFamily="inherit"
+          >
+            {BRL.format(valorTotal)}
+          </text>
+          <text
+            x={cx} y={cy + centerValueSize * 0.38 + centerSubSize + 3}
+            textAnchor="middle"
+            fontSize={centerSubSize}
+            fontWeight="500"
+            fill={textMuted}
+            fontFamily="inherit"
+          >
+            Total
+          </text>
+        </>
+      ) : (
+        <>
+          <text x={cx} y={cy + 4}  textAnchor="middle" fontSize={centerSubSize} fontWeight="500" fill={textMuted} fontFamily="inherit">Carteira</text>
+          <text x={cx} y={cy + 4 + centerSubSize + 2} textAnchor="middle" fontSize={centerSubSize} fontWeight="500" fill={textMuted} fontFamily="inherit">ideal</text>
+        </>
       )}
-    </div>
+
+      {/* ── Leader-line labels (Figma style) ── */}
+      {showLabels && slices.map(({ classe, percentual, start, end }) => {
+        // Skip labels for very small slices to avoid clutter
+        if (end - start < 12) return null;
+
+        const midDeg = (start + end) / 2;
+        const midRad = (midDeg - 90) * Math.PI / 180;
+        const isRight = Math.cos(midRad) >= 0;
+        const color = CLASS_COLORS[classe] ?? '#9ca3af';
+
+        // Connector: dot on outer edge → elbow out → horizontal tick → text
+        const dot    = polar(cx, cy, outerR + 2, midDeg);
+        const elbow  = polar(cx, cy, outerR + 22, midDeg);
+        const tickLen = 18;
+        const tick   = { x: elbow.x + (isRight ? tickLen : -tickLen), y: elbow.y };
+        const textX  = isRight ? tick.x + 5 : tick.x - 5;
+        const anchor = isRight ? 'start' : 'end';
+
+        const valStr = valorTotal
+          ? BRL.format((percentual / 100) * valorTotal)
+          : `${percentual}%`;
+
+        const labelColor     = darkBg ? 'rgba(255,255,255,0.9)'  : '#2B3674';
+        const labelSubColor  = darkBg ? 'rgba(255,255,255,0.55)' : '#A3AED0';
+
+        return (
+          <g key={`lbl-${classe}`}>
+            {/* Dot at outer edge */}
+            <circle cx={dot.x} cy={dot.y} r="2.2" fill={color} />
+
+            {/* Polyline connector */}
+            <polyline
+              points={[dot, elbow, tick].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}
+              fill="none"
+              stroke={color}
+              strokeWidth="1.3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {/* Class name */}
+            <text
+              x={textX}
+              y={elbow.y - 5}
+              textAnchor={anchor}
+              fontSize="11"
+              fontWeight="600"
+              fill={labelColor}
+              fontFamily="inherit"
+            >
+              {classe}
+            </text>
+
+            {/* Value / percentage */}
+            <text
+              x={textX}
+              y={elbow.y + 8}
+              textAnchor={anchor}
+              fontSize="10"
+              fontWeight="500"
+              fill={labelSubColor}
+              fontFamily="inherit"
+            >
+              {valStr}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }

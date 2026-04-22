@@ -10,7 +10,153 @@ Plataforma de investimentos que guia iniciantes do primeiro aporte até R$500k. 
 | Frontend | React 19 + TypeScript + Vite |
 | Batch | Python 3.11 |
 | Banco | PostgreSQL 15 |
-| IA | Claude via Vertex AI (Google Cloud) |
+| IA | Gemini via Vertex AI (GCP) ou Google AI Studio |
+
+---
+
+## Pré-requisitos
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e rodando
+- [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) — necessário apenas na Opção B (Vertex AI)
+
+---
+
+## Configuração inicial
+
+### 1. Copie o arquivo de variáveis de ambiente
+
+```bash
+cp .env.example .env
+```
+
+Preencha os valores obrigatórios no `.env`:
+
+```env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=uma-senha-segura
+
+JWT_SECRET=uma-chave-com-no-minimo-32-caracteres
+```
+
+### 2. Configure o Gemini — escolha uma opção
+
+#### Opção A — Google AI Studio (mais simples, gratuito)
+
+1. Gere uma chave em [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+2. Adicione ao `.env`:
+
+```env
+GEMINI_API_KEY=sua-chave-aqui
+VERTEX_AI_MODEL=gemini-2.5-flash
+```
+
+> Quando `GEMINI_API_KEY` está definida, as variáveis `VERTEX_AI_PROJECT` e `VERTEX_AI_LOCATION` são ignoradas.
+
+#### Opção B — Vertex AI no GCP
+
+1. No [Console GCP](https://console.cloud.google.com), ative a API **Vertex AI** no seu projeto
+2. Autentique localmente:
+
+```bash
+gcloud auth application-default login
+```
+
+3. Adicione ao `.env`:
+
+```env
+VERTEX_AI_PROJECT=id-do-seu-projeto-gcp
+VERTEX_AI_LOCATION=us-central1
+VERTEX_AI_MODEL=gemini-2.5-flash
+```
+
+> O `docker-compose.yml` monta `~/.config/gcloud` dentro dos containers automaticamente — o ADC funciona sem variável de chave adicional.
+
+### 3. Verifique a conexão com o Gemini
+
+```bash
+docker compose run --rm batch python jobs/test_vertex_ai.py
+```
+
+Uma resposta do modelo confirma que a configuração está correta.
+
+---
+
+## Subindo o ambiente
+
+```bash
+docker compose up --build
+```
+
+| Serviço | URL |
+|---------|-----|
+| Frontend | http://localhost:5173 |
+| API / Swagger | http://localhost:5000/swagger |
+| PostgreSQL | localhost:5432 |
+
+Para rodar em background:
+
+```bash
+docker compose up --build -d
+```
+
+Para parar:
+
+```bash
+docker compose down
+```
+
+---
+
+## Testes
+
+### Testes unitários da API (C#)
+
+```bash
+docker build -f api/Dockerfile.test -t invest_tests ./api
+docker run --rm invest_tests
+```
+
+> O `docker build` compila os testes na imagem. O `docker run` apenas executa — rápido e sem recompilar.
+
+### Testes unitários do batch (Python)
+
+```bash
+docker compose run --rm batch python -m pytest tests/ -v
+```
+
+---
+
+## Batch jobs
+
+O container `batch` fica em `sleep infinity` — os jobs são executados via `exec` ou `run`.
+
+### Subir o container de batch
+
+```bash
+docker compose --profile batch up -d batch
+```
+
+### Rodar todos os jobs em sequência
+
+```bash
+docker compose exec batch python jobs/run_all.py
+```
+
+### Rodar um job individualmente
+
+```bash
+docker compose exec batch python jobs/benchmarks.py
+docker compose exec batch python jobs/market_data.py
+docker compose exec batch python jobs/rankings.py
+docker compose exec batch python jobs/portfolio_history.py
+docker compose exec batch python jobs/alerts.py
+```
+
+### Rodar o batch sem deixar o container ativo
+
+```bash
+docker compose run --rm --profile batch batch python jobs/run_all.py
+```
 
 ---
 
@@ -18,108 +164,29 @@ Plataforma de investimentos que guia iniciantes do primeiro aporte até R$500k. 
 
 ```
 invest/
-├── api/                    # Backend C# .NET 8
-│   ├── Invest.Domain/      # Entidades, Value Objects, interfaces (sem dependências externas)
-│   ├── Invest.Application/ # Use cases — Commands, Queries, Handlers, Validators
+├── api/                       # Backend C# .NET 8
+│   ├── Invest.Domain/         # Entidades, Value Objects, interfaces (sem dependências externas)
+│   ├── Invest.Application/    # Use cases — Commands, Queries, Handlers, Validators
 │   ├── Invest.Infrastructure/ # EF Core, repositórios, serviços externos
-│   ├── Invest.API/         # Controllers, Middleware, Program.cs
-│   ├── Invest.Tests/       # Testes unitários (xUnit)
-│   └── Invest.Tests.Integration/ # Testes de integração
+│   ├── Invest.API/            # Controllers, Middleware, Program.cs
+│   └── Invest.Tests/          # Testes unitários (xUnit)
 │
-├── web/                    # Frontend React + TypeScript
+├── web/                       # Frontend React + TypeScript
 │   └── src/
-│       ├── components/     # ui/, charts/, layout/
-│       ├── pages/          # auth/, onboarding/, portfolio/, dashboard/
-│       ├── services/       # Clientes de API (profileService, rankingService…)
-│       ├── hooks/          # useAuth, usePortfolio, useDashboard
-│       └── contexts/       # AuthContext, OnboardingContext
+│       ├── components/        # ui/, charts/, layout/
+│       ├── pages/             # auth/, onboarding/, portfolio/, dashboard/
+│       ├── services/          # Clientes de API (profileService, rankingService…)
+│       ├── hooks/             # useAuth, usePortfolio, useDashboard
+│       └── contexts/          # AuthContext, OnboardingContext
 │
-├── batch/                  # Jobs Python
-│   ├── jobs/               # rankings.py, alerts.py, market_data.py…
-│   ├── services/           # yfinance, CVM, BCB, scoring, db
-│   └── config.py
+├── batch/                     # Jobs Python
+│   ├── jobs/                  # rankings.py, alerts.py, market_data.py…
+│   ├── services/              # yfinance, CVM, BCB, scoring, db
+│   └── tests/                 # pytest
 │
-├── db/                     # schema.sql + seeds.sql
+├── db/                        # schema.sql + seeds.sql
 ├── docker-compose.yml
 └── .env.example
-```
-
----
-
-## Como rodar
-
-### Docker Compose (recomendado)
-
-```bash
-cp .env.example .env
-# Preencher .env com credenciais do GCP e senha do banco
-
-docker compose up -d
-```
-
-| Serviço | URL |
-|---------|-----|
-| Web | http://localhost:5173 |
-| API / Swagger | http://localhost:5000/swagger |
-| PostgreSQL | localhost:5432 |
-
-Para rodar os jobs do batch manualmente:
-
-```bash
-docker compose exec batch python jobs/rankings.py
-docker compose exec batch python jobs/alerts.py
-docker compose exec batch python jobs/run_all.py   # orquestrador (dias úteis)
-```
-
----
-
-### API (local)
-
-```bash
-cd api
-dotnet restore
-dotnet run --project Invest.API/Invest.API.csproj
-```
-
-### Web (local)
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-### Batch (local)
-
-```bash
-cd batch
-pip install -r requirements.txt
-python jobs/rankings.py
-pytest tests/
-```
-
----
-
-## Variáveis de ambiente
-
-Copie `.env.example` para `.env` e preencha:
-
-```env
-# PostgreSQL
-POSTGRES_PASSWORD=sua-senha
-
-# API C#
-DATABASE_URL=Host=localhost;Database=invest_dev;Username=postgres;Password=sua-senha
-JWT_SECRET=chave-secreta-minimo-32-caracteres
-JWT_EXPIRATION=24h
-
-# Google Cloud / Vertex AI
-VERTEX_AI_PROJECT=seu-projeto-gcp
-VERTEX_AI_LOCATION=us-central1
-
-# Opcional
-CORS_ORIGINS=http://localhost:5173
-LOG_LEVEL=info
 ```
 
 ---
@@ -172,25 +239,10 @@ LOG_LEVEL=info
 ## Regras de negócio relevantes
 
 - **Alocação:** tabela fixa por perfil (conservador / moderado / arrojado) e faixa de patrimônio (até R$10k / R$10k–R$100k / acima de R$100k)
-- **Ranking:** top 20 por sub-estratégia — score = 70% quantitativo (yfinance) + 30% qualitativo (Claude)
+- **Ranking:** top 20 por sub-estratégia — score = 70% quantitativo (yfinance) + 30% qualitativo (Gemini)
 - **Desvio:** normal 0–3% | atenção 3–5% | extraordinário >5% (gera alerta imediato)
 - **Rebalanceamento trimestral:** fevereiro, maio, agosto, novembro
 - **O app é sugestivo** — nunca executa ordens de compra/venda
-
----
-
-## Testes
-
-```bash
-# API — unitários
-cd api && dotnet test Invest.Tests/
-
-# API — integração
-dotnet test Invest.Tests.Integration/
-
-# Batch
-cd batch && pytest tests/
-```
 
 ---
 

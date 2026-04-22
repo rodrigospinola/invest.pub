@@ -16,7 +16,6 @@ logger = get_logger("run_all")
 JOBS = [
     ("benchmarks",        "jobs/benchmarks.py"),
     ("market_data",       "jobs/market_data.py"),
-    ("fund_data",         "jobs/fund_data.py"),
     ("rankings",          "jobs/rankings.py"),
     ("portfolio_history", "jobs/portfolio_history.py"),
     ("alerts",            "jobs/alerts.py"),

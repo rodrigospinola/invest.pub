@@ -11,7 +11,7 @@ export const chatService = {
       message,
       context,
       history,
-    });
+    }, { timeout: 30_000 });
     return response.data;
   },
 };

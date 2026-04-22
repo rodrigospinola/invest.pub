@@ -76,12 +76,16 @@ export default function StrategyPage() {
     if (!pendingAcoes || !pendingFiis) return;
     setIsSaving(true);
     setSaveError('');
+    const isFirstSave = !savedAcoes;
     try {
       const ss = await rankingService.createSubStrategy(pendingAcoes, pendingFiis);
       setSubStrategy(ss);
-      // Recarrega o estado real do backend para atualizar o sidebar
       refreshPhase();
-      // Try to reload suggestion with new strategy
+      if (isFirstSave) {
+        navigate('/portfolio/import');
+        return;
+      }
+      // Editing existing strategy: stay on page and refresh suggestion
       try { setSuggestion(await rankingService.getSuggestion()); } catch { setSuggestion(null); }
     } catch {
       setSaveError('Erro ao salvar estratégia. Tente novamente.');

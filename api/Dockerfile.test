@@ -1,0 +1,14 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0
+WORKDIR /src
+
+COPY Invest.sln .
+COPY Invest.Domain/Invest.Domain.csproj Invest.Domain/
+COPY Invest.Application/Invest.Application.csproj Invest.Application/
+COPY Invest.Tests/Invest.Tests.csproj Invest.Tests/
+
+RUN dotnet restore Invest.Tests/Invest.Tests.csproj
+
+COPY . .
+RUN dotnet build Invest.Tests/Invest.Tests.csproj -c Release --no-restore
+
+ENTRYPOINT ["dotnet", "test", "Invest.Tests/Invest.Tests.csproj", "-c", "Release", "--no-build", "-q"]

@@ -158,55 +158,9 @@ export default function OnboardingResultPage() {
             </p>
           </div>
 
-          {/* Donut + bars in two-column layout */}
-          <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
-            {/* Left: Donut */}
-            <div style={{ padding: '0 24px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '220px' }}>
-              <DonutChart data={profile.alocacaoAlvo} valorTotal={profile.valorTotal} size={180} />
-            </div>
-
-            {/* Right: Allocation bars */}
-            <div style={{ flex: 1, minWidth: '220px', padding: '0 24px 24px', borderLeft: '1px solid var(--border)' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '12px' }}>
-                Detalhamento
-              </div>
-              {profile.alocacaoAlvo.map((item, idx) => {
-                const color = CLASS_COLORS[item.classe] ?? '#9ca3af';
-                const valor = (item.percentual / 100) * profile.valorTotal;
-                return (
-                  <div
-                    key={item.classe}
-                    style={{
-                      marginBottom: idx < profile.alocacaoAlvo.length - 1 ? '12px' : 0,
-                      opacity: visible ? 1 : 0,
-                      transition: `opacity 0.4s ease ${0.1 + idx * 0.08}s`,
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                        <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: color, flexShrink: 0 }} />
-                        <span style={{ fontSize: '13px', color: 'var(--text-body)', fontWeight: 500 }}>{item.classe}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{BRL.format(valor)}</span>
-                        <span style={{ fontSize: '13px', fontWeight: 700, color }}>
-                          {item.percentual}%
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%',
-                        width: visible ? `${item.percentual}%` : '0%',
-                        background: color,
-                        borderRadius: '3px',
-                        transition: `width 0.7s ease ${0.2 + idx * 0.1}s`,
-                      }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {/* Donut centralizado com labels externos (TapTap design) */}
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 24px 28px' }}>
+            <DonutChart data={profile.alocacaoAlvo} valorTotal={profile.valorTotal} size={180} />
           </div>
         </div>
 

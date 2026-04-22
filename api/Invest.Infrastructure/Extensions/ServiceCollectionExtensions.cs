@@ -30,7 +30,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBenchmarkRepository, BenchmarkRepository>();
         services.AddScoped<IAlertRepository, AlertRepository>();
 
-        services.AddHttpClient<IVertexAiService, VertexAiService>();
+        services.AddHttpClient<IVertexAiService, VertexAiService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
 
         return services;
     }

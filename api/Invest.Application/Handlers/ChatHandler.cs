@@ -31,7 +31,13 @@ public class ChatHandler
         var systemPrompt = GetSystemPrompt(query.Context);
         var tools = GetTools(query.Context);
 
-        var messages = (query.History ?? new List<ChatMessage>())
+        // Limita histórico às últimas 10 mensagens para reduzir tokens enviados ao modelo
+        const int MaxHistory = 10;
+        var history = query.History ?? new List<ChatMessage>();
+        if (history.Count > MaxHistory)
+            history = history.Skip(history.Count - MaxHistory).ToList();
+
+        var messages = history
             .Select(m => new VertexAiMessage(m.Role, m.Content))
             .ToList();
 
@@ -50,7 +56,7 @@ public class ChatHandler
             {
                 var (cleanText, suggestedReplies) = ParseSuggestions(response.Text);
 
-                var history = messages
+                var responseHistory = messages
                     .Where(m => m.Role != "tool" &&
                                 !(m.Role == "assistant" && m.Content.TrimStart().StartsWith("[")))
                     .Select(m => new ChatMessageResponse(m.Role, m.Content))
@@ -59,7 +65,7 @@ public class ChatHandler
 
                 return Result<ChatResponse>.Success(new ChatResponse(
                     cleanText,
-                    history,
+                    responseHistory,
                     toolsCalled.Any() ? toolsCalled : null,
                     suggestedReplies,
                     allocationPreview
@@ -78,7 +84,7 @@ public class ChatHandler
                     allocationPreview = ParseAllocationPreview(toolResult);
 
                 messages.Add(new VertexAiMessage("tool",
-                    JsonSerializer.Serialize(new { tool_use_id = toolUse.Id, content = toolResult })));
+                    JsonSerializer.Serialize(new { tool_use_id = toolUse.Id, name = toolUse.Name, content = toolResult })));
             }
         }
 
