@@ -1,0 +1,78 @@
+﻿services:
+  db:
+    image: postgres:15-alpine
+    container_name: invest_db
+    environment:
+      POSTGRES_DB: invest_dev
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./db/seeds.sql:/docker-entrypoint-initdb.d/02_seeds.sql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d invest_dev" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: invest_api
+    environment:
+      DATABASE_URL: "Host=db;Database=invest_dev;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      JWT_SECRET: "${JWT_SECRET}"
+      JWT_EXPIRATION: "24h"
+      CORS_ORIGINS: "http://localhost:5173"
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: "http://+:5000"
+      VERTEX_AI_PROJECT: "${VERTEX_AI_PROJECT}"
+      VERTEX_AI_LOCATION: "${VERTEX_AI_LOCATION}"
+      VERTEX_AI_MODEL: "${VERTEX_AI_MODEL}"
+    volumes:
+      - "${APPDATA}/gcloud:/root/.config/gcloud:ro"
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: "http://localhost:5000"
+    container_name: invest_web
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+  batch:
+    build:
+      context: ./batch
+      dockerfile: Dockerfile
+    container_name: invest_batch
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/invest_dev"
+      VERTEX_AI_PROJECT: "${VERTEX_AI_PROJECT}"
+      VERTEX_AI_LOCATION: "${VERTEX_AI_LOCATION}"
+      VERTEX_AI_MODEL: "${VERTEX_AI_MODEL}"
+      LOG_LEVEL: "info"
+      PYTHONPATH: "/app"
+    volumes:
+      - ./batch/data:/app/data
+      - "${APPDATA}/gcloud:/root/.config/gcloud:ro"
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - batch
+
+volumes:
+  postgres_data:

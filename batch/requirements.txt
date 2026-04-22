@@ -1,0 +1,9 @@
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+requests==2.31.0
+yfinance==0.2.38
+pandas==2.2.0
+google-cloud-aiplatform>=1.71.0
+google-genai>=1.0.0
+anthropic[vertex]==0.40.0
+pytest==8.3.0
